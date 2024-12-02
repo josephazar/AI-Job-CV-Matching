@@ -1,0 +1,29 @@
+# Ignore Python bytecode files
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignore virtual environment folder
+venv/
+
+# Ignore environment configuration file for sensitive data
+.env
+
+# Ignore log files
+*.log
+
+# Ignore temporary files created by editors
+*.swp
+
+api/venv/
+
+
+# Ignore output and temp files
+cv_outputs/
+temp/
+
+# Ignore IDE-specific settings (e.g., VS Code settings)
+.vscode/
+
+# Ignore compiled files and unnecessary temporary files
+*.pyc
