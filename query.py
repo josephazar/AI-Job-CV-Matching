@@ -98,128 +98,119 @@ def filter_matching_results(query_results, extracted_skills, job_skills, thresho
     return matching_results
 
 
-# Streamlit app
-st.title("Candidate filtering system")
+def search_and_filter_candidates():
+    """Main wrapper function for the candidate filtering system."""
+    st.title("Candidate Filtering System")
 
-# Job description input (search query)
-job_description = st.text_area("Enter the job description:", placeholder="Paste the job description here...")
+    # Job description input (search query)
+    job_description = st.text_area("Enter the job description:", placeholder="Paste the job description here...")
 
-# Filter options for search fields
-with st.expander("Advanced Search Fields (Optional)") :
-    skill_search = st.text_input("Search in skills:", placeholder="e.g., Python")
-    education_search = st.text_input("Search in education:", placeholder="e.g., Computer Science")
+    # Filter options for search fields
+    with st.expander("Advanced Search Fields (Optional)"):
+        skill_search = st.text_input("Search in skills:", placeholder="e.g., Python")
+        education_search = st.text_input("Search in education:", placeholder="e.g., Computer Science")
 
-# Construct list of fields to search
-search_fields = []
+    # Construct list of fields to search
+    search_fields = []
+    if skill_search:
+        search_fields.append("skills")
+    if education_search:
+        search_fields.append("education")
 
-if skill_search:
-    search_fields.append("skills")
-if education_search:
-    search_fields.append("education")
+    # Results limit
+    top_n = st.slider("Number of results to return:", min_value=1, max_value=50, value=10)
 
-
-# Results limit
-top_n = st.slider("Number of results to return:", min_value=1, max_value=50, value=10)
-
-if st.button("Search"):
-    if job_description.strip():  # Ensure the job description is not empty
-        with st.spinner("Searching..."):
-            # Perform the search using job description as the query
-            results = search_index(
-                search_text=job_description,
-                search_fields=",".join(search_fields) if search_fields else None,
-                top=top_n,
-            )
-            st.session_state.results = results  # Store results in session state
-
-        if st.session_state.results:
-            st.subheader("Pre-Filtered Search Results")
-
-            # Dynamically convert the results to a pandas DataFrame
-            df = pd.json_normalize(st.session_state.results)
-
-            # Show the table of results
-            st.write(df)
-
-            # Extracted skills from the combined query results (job description)
-            extracted_skills = []
-            for result in st.session_state.results:
-                if "skills" in result:
-                    try:
-                        skills = json.loads(result["skills"])  # Parse JSON string
-                        extracted_skills.extend(skills)
-                    except json.JSONDecodeError:
-                        st.error(f"Failed to parse skills for result: {result}")
-            
-            # Remove duplicate skills
-            extracted_skills = list(set(extracted_skills))
-
-            # Display extracted skills
-            if extracted_skills:
-                st.subheader("Extracted Skills from Results")
-            else:
-                st.warning("No skills found in the query results.")
-            
-            # Extract job skills from the provided job description
-            with st.spinner("Extracting job information..."):
-                try:
-                    job_info = extract_job_information(job_description)
-                except Exception as e:
-                    st.error(f"Error extracting job information: {e}")
-                    job_info = None
-
-            if job_info and "Skills" in job_info:
-                job_skills = job_info["Skills"]
-                st.write(f"Job skills: {', '.join(job_skills)}")  # Debugging: Check extracted job skills
-                
-                with st.spinner("Filtering results by matching skills..."):
-                    filtered_results = filter_matching_results(
-                        st.session_state.results, extracted_skills, job_skills
-                    )
-                    st.session_state.filtered_results = filtered_results  # Store filtered results in session state
-                
-                st.subheader("Filtered Matching Results (Based on Skills)")
-                if st.session_state.filtered_results:
-                    # Convert filtered results into DataFrame
-                    df_filtered = pd.json_normalize(st.session_state.filtered_results)
-                    st.write(df_filtered)  # Display the filtered results as a table
-                else:
-                    st.warning("No matching results found based on skills.")
-            else:
-                st.error("Failed to extract or match job skills.")
-        else:
-            st.warning("No results found for the given job description.")
-    else:
-        st.warning("Please enter a job description to search.")
-
-# Ensure that 'filtered_results' is initialized in session state
-if 'filtered_results' not in st.session_state:
-    st.session_state.filtered_results = []
-
-if st.session_state.filtered_results:
-    st.subheader("Filter by Hard Requirements")
-    hard_requirements_input = st.text_area(
-        "Enter hard requirements (comma-separated):",
-        placeholder="e.g., 5 years of experience, Python, AWS certification"
-    )
-
-    if st.button("Apply Hard Requirements"):
-        # Convert input to a list of strings by splitting on commas and stripping whitespace
-        hard_requirements = [req.strip() for req in hard_requirements_input.split(",")]
-
-        if hard_requirements:
-            with st.spinner("Applying hard requirements..."):
-                # Apply the hard requirements filtering to the existing filtered_results
-                final_results = filter_by_hard_requirements(
-                    st.session_state.filtered_results, hard_requirements
+    if st.button("Search"):
+        if job_description.strip():  # Ensure the job description is not empty
+            with st.spinner("Searching..."):
+                # Perform the search using job description as the query
+                results = search_index(
+                    search_text=job_description,
+                    search_fields=",".join(search_fields) if search_fields else None,
+                    top=top_n,
                 )
+                st.session_state.results = results  # Store results in session state
 
-            st.subheader("Final Results After Hard Requirements")
-            if final_results:
-                # Convert final results into DataFrame
-                df_final = pd.json_normalize(final_results)
-                st.write(df_final)  # Display the final results as a table
+            if st.session_state.results:
+                st.subheader("Pre-Filtered Search Results")
+
+                # Dynamically convert the results to a pandas DataFrame
+                df = pd.json_normalize(st.session_state.results)
+                st.write(df)
+
+                # Extracted skills from the combined query results (job description)
+                extracted_skills = []
+                for result in st.session_state.results:
+                    if "skills" in result:
+                        try:
+                            skills = json.loads(result["skills"])  # Parse JSON string
+                            extracted_skills.extend(skills)
+                        except json.JSONDecodeError:
+                            st.error(f"Failed to parse skills for result: {result}")
+
+                # Remove duplicate skills
+                extracted_skills = list(set(extracted_skills))
+
+                # Display extracted skills
+                if extracted_skills:
+                    st.subheader("Extracted Skills from Results")
+                else:
+                    st.warning("No skills found in the query results.")
+
+                # Extract job skills from the provided job description
+                with st.spinner("Extracting job information..."):
+                    try:
+                        job_info = extract_job_information(job_description)
+                    except Exception as e:
+                        st.error(f"Error extracting job information: {e}")
+                        job_info = None
+
+                if job_info and "Skills" in job_info:
+                    job_skills = job_info["Skills"]
+                    st.write(f"Job skills: {', '.join(job_skills)}")
+
+                    with st.spinner("Filtering results by matching skills..."):
+                        filtered_results = filter_matching_results(
+                            st.session_state.results, extracted_skills, job_skills
+                        )
+                        st.session_state.filtered_results = filtered_results
+
+                    st.subheader("Filtered Matching Results (Based on Skills)")
+                    if st.session_state.filtered_results:
+                        df_filtered = pd.json_normalize(st.session_state.filtered_results)
+                        st.write(df_filtered)
+                    else:
+                        st.warning("No matching results found based on skills.")
+                else:
+                    st.error("Failed to extract or match job skills.")
             else:
-                st.warning("No results matched the hard requirements.")
+                st.warning("No results found for the given job description.")
         else:
-            st.warning("Please enter hard requirements to filter the results.")
+            st.warning("Please enter a job description to search.")
+
+    if "filtered_results" not in st.session_state:
+        st.session_state.filtered_results = []
+
+    if st.session_state.filtered_results:
+        st.subheader("Filter by Hard Requirements")
+        hard_requirements_input = st.text_area(
+            "Enter hard requirements (comma-separated):",
+            placeholder="e.g., 5 years of experience, Python, AWS certification"
+        )
+
+        if st.button("Apply Hard Requirements"):
+            hard_requirements = [req.strip() for req in hard_requirements_input.split(",")]
+            if hard_requirements:
+                with st.spinner("Applying hard requirements..."):
+                    final_results = filter_by_hard_requirements(
+                        st.session_state.filtered_results, hard_requirements
+                    )
+
+                st.subheader("Final Results After Hard Requirements")
+                if final_results:
+                    df_final = pd.json_normalize(final_results)
+                    st.dataframe(df_final)
+                else:
+                    st.warning("No results matched the hard requirements.")
+            else:
+                st.warning("Please enter hard requirements to filter the results.")

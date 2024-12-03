@@ -116,8 +116,8 @@ def display_pdf_from_blob(blob_name):
 
 
 # Streamlit App
-def main():
-    st.title("CV Analysis")
+def cv_analysis_page():
+    st.title("CV Database")
 
     # File upload sections
     uploaded_files = st.file_uploader("Upload CVs (PDF)", accept_multiple_files=True, type=['pdf'])
@@ -163,7 +163,3 @@ def main():
                 display_pdf_from_blob(selected_pdf)
     else:
         st.write("No PDFs found in Blob Storage.")
-
-
-if __name__ == "__main__":
-    main()

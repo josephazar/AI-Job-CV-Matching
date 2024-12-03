@@ -3,6 +3,7 @@ import re
 from dotenv import load_dotenv
 from openai import AzureOpenAI
 import os
+
 # Load environment variables from the .env file
 load_dotenv()
 
@@ -18,39 +19,41 @@ openclient = AzureOpenAI(
     api_version=api_version
 )
 
-
-
 def clean_gpt_output(gpt_output):
-    """Clean the GPT-4 output by removing unwanted characters after JSON."""
-    # Remove any unwanted text such as 'json' or code block markers
-    gpt_output = re.sub(r'(?i)^.*json[^\{]*', '', gpt_output)  # Remove leading text before JSON
-
-    # Remove any extraneous non-whitespace characters after the closing brace
-    gpt_output = re.sub(r'}\s*[^}]*$', '}', gpt_output)  # Ensure only the valid JSON is retained after '}'
-
-    # Ensure there are no backticks or code block markers left
-    gpt_output = re.sub(r'^[`]+', '', gpt_output)  # Remove backticks at the beginning
-    gpt_output = re.sub(r'[`]+$', '', gpt_output)  # Remove backticks at the end
-
-    # Clean up escaped quotes within the string
-    gpt_output = re.sub(r'\\\"', '"', gpt_output)
-
-    # Return cleaned output, trimming any unwanted whitespace at the ends
-    return gpt_output.strip()
-
-def parse_json_output(gpt_response):
-    """Parse the cleaned GPT output to JSON."""
-    cleaned_response = clean_gpt_output(gpt_response)
-
+    """Clean and standardize GPT-4 output to ensure valid JSON."""
     try:
-        # Try to parse the cleaned response into JSON
-        return json.loads(cleaned_response)
-    except json.JSONDecodeError as e:
-        print(f"Error decoding GPT-4 response: {e}")
-        print(f"Raw cleaned response content: {cleaned_response}")
+        # Ensure no trailing commas in JSON arrays or objects
+        gpt_output = re.sub(r',\s*([\]}])', r'\1', gpt_output)  # Remove trailing commas
+
+        # Correct improperly quoted JSON arrays
+        gpt_output = re.sub(r'"\[', '[', gpt_output)  # Replace "[ with [
+        gpt_output = re.sub(r'\]"', ']', gpt_output)  # Replace ]" with ]
+
+        # Replace escaped quotes within strings
+        gpt_output = gpt_output.replace('\\"', '"')
+
+        # Strip unnecessary newlines or spaces
+        gpt_output = gpt_output.strip()
+
+        return gpt_output
+    except Exception as e:
+        print(f"Error cleaning GPT output: {e}")
+        return gpt_output  # Return as-is if cleaning fails
+    
+    
+def extract_email_data(json_response):
+    """Extract only the data starting from 'email' key onwards."""
+    try:
+        # Parse the JSON response
+        data = json.loads(json_response)
+        # Ensure 'filtered_results' key exists and extract the list
+        if "filtered_results" in data and isinstance(data["filtered_results"], list):
+            return data["filtered_results"]
+        else:
+            raise KeyError("'filtered_results' key is missing or not a list in the response.")
+    except Exception as e:
+        print(f"Error extracting email data: {e}")
         return None
-
-
 
 def filter_by_hard_requirements(results, hard_requirements):
     try:
@@ -69,15 +72,15 @@ def filter_by_hard_requirements(results, hard_requirements):
         # Azure OpenAI GPT-4 call
         response = openclient.chat.completions.create(
             model="gpt-4",
-            messages=[ 
+            messages=[
                 {"role": "system", "content": "You are an expert in job analysis and resume filtering."},
                 {
                     "role": "user",
                     "content": (
                         f"Filter the provided query results based on the following hard requirements:\n\n"
                         f"{json.dumps(gpt_input, indent=2)}\n\n"
-                        f"Return the results in JSON format only dont add any other characters or words ensure response is proper json format"
-                        f"To fix the provided JSON structure so that it is valid, you need to properly format the arrays (education, certifications, work_experience, and skills) by removing the extra quotation marks around them"
+                        f"Return the results in JSON format only, starting directly from the list of objects. "
+                        f"Do not include the 'filtered_results' wrapper. Ensure the JSON is valid and properly formatted."
                     )
                 }
             ],
@@ -85,19 +88,22 @@ def filter_by_hard_requirements(results, hard_requirements):
             temperature=0.5
         )
 
-        # Correct way to access the content from the response
+        # Extract the response content
         gpt_response = response.choices[0].message.content
-        print(gpt_response)
-        # Clean the GPT response to remove unwanted text and code block markers
+        print("Raw GPT Response:", gpt_response)  # Debugging step
+        
+        # Clean the GPT response
         cleaned_response = clean_gpt_output(gpt_response)
-        print(cleaned_response)
-        # Return the cleaned response directly (as a raw JSON string)
-        if cleaned_response:
-            return cleaned_response
-        else:
-            print("Received an empty response from GPT-4.")
-            return ''
+        print("Cleaned Response:", cleaned_response)  # Debugging step
+
+        # Parse the cleaned response directly
+        try:
+            email_data = json.loads(cleaned_response)
+            return email_data
+        except json.JSONDecodeError as e:
+            print(f"Error parsing cleaned response to JSON: {e}")
+            return None
 
     except Exception as e:
         print(f"Error in filtering with GPT-4: {e}")
-        return ''
+        return None

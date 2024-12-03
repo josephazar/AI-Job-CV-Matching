@@ -13,6 +13,7 @@ from azure.search.documents.indexes.models import (
     SimpleField,
     SearchableField
 )
+import logging
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -34,41 +35,102 @@ container_client = blob_service_client.get_container_client(container_name)
 index_client = SearchIndexClient(endpoint=search_endpoint, credential=AzureKeyCredential(search_api_key))
 indexer_client = SearchIndexerClient(endpoint=search_endpoint, credential=AzureKeyCredential(search_api_key))
 
+# Logging setup
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Function to update the JSON files to include the filename without the extension
-def add_filename_to_json(file_path, filename):
-    # Strip the file extension
-    name_without_extension = os.path.splitext(filename)[0]
-    
-    with open(file_path, "r") as file:
-        data = json.load(file)
+def is_flattened(entry):
+    """
+    Check if a given resume entry is already flattened.
+    """
+    flattened_keys = {"work_experience", "skills", "certifications", "education", "phone_number", "email", "filename"}
+    return flattened_keys.issubset(entry.keys())
 
-    # Add the stripped filename as a field in the `resume` object
-    if isinstance(data, list) and "resume" in data[0]:
-        data[0]["resume"]["filename"] = name_without_extension
+def flatten_resume(resume):
+    """
+    Flatten the nested resume JSON into a flat structure suitable for Azure Search indexing.
+    """
+    try:
+        flattened = {
+            "work_experience": [
+                f"{job['job_title']} at {job['company']} ({job.get('start_month', 'Not Mentionned')}/{job.get('start_year', 'Not Mentionned')} - {job.get('end_month', 'Not Mentionned')}/{job.get('end_year', 'Not Mentionned')})" 
+                for job in resume.get("Work_Experience", {}).get("items", [])
+            ],
+            "skills": resume.get("Skills", {}).get("items", []),
+            "certifications": resume.get("Certifications", {}).get("items", []),
+            "education": [
+                f"{edu['major']} at {edu['institution']} ({edu.get('start_year', 'Not Mentionned')} - {edu.get('end_year', 'Not Mentionned')})"
+                for edu in resume.get("Education", {}).get("items", [])
+            ],
+            "phone_number": resume.get("Personnel_info", {}).get("phone_number", "Not Mentionned"),
+            "email": resume.get("Personnel_info", {}).get("email", "Not Mentionned"),
+            "filename": resume.get("filename", "Not Mentionned")
+        }
+        return flattened
+    except Exception as e:
+        print(f"Error flattening resume: {e}")
+        return {}
 
-    # Save the modified JSON back to the file
-    with open(file_path, "w") as file:
-        json.dump(data, file, indent=4)
+def add_filename_and_flatten_json(file_path, filename):
+    """
+    Overwrite the file with a new JSON containing only flattened entries if not already flattened.
+    """
+    try:
+        # Load JSON data from the original file
+        with open(file_path, "r") as file:
+            data = json.load(file)
 
-# Function to upload JSON files to Azure Blob Storage
-def upload_json_files():
-    if not container_client.exists():
-        container_client.create_container()
+        # Add filename without extension to each resume and flatten if necessary
+        name_without_extension = os.path.splitext(filename)[0]
+        updated_data = []
 
+        if isinstance(data, list):
+            for entry in data:
+                if not is_flattened(entry):  # Only flatten if not already flattened
+                    resume = entry.get("resume", {})
+                    resume["filename"] = name_without_extension
+
+                    # Flatten the resume and update entry
+                    flattened_resume = flatten_resume(resume)
+                    updated_data.append(flattened_resume)
+                else:
+                    updated_data.append(entry)  # Keep as is if already flattened
+
+        # Overwrite the file with updated data
+        with open(file_path, "w") as new_file:
+            json.dump(updated_data, new_file, indent=4)
+
+        print(f"File processed and saved: {file_path}")
+
+    except Exception as e:
+        print(f"Error processing file {file_path}: {e}")
+
+def upload_file_to_blob(file_path, filename):
+    """
+    Upload a file to Azure Blob Storage.
+    """
+    try:
+        with open(file_path, "rb") as data:
+            blob_client = container_client.get_blob_client(blob=filename)
+            blob_client.upload_blob(data, overwrite=True)
+            logger.info(f"File '{filename}' uploaded to Blob Storage.")
+    except Exception as e:
+        logger.error(f"Failed to upload file '{filename}' to Blob Storage: {e}")
+
+
+def upload_json_files(local_folder_path):
+    """
+    Process all JSON files in the specified folder and upload them to Azure Blob Storage.
+    """
     for filename in os.listdir(local_folder_path):
         if filename.endswith(".json"):  # Only process .json files
             file_path = os.path.join(local_folder_path, filename)
 
-            # Update JSON file with the stripped filename
-            add_filename_to_json(file_path, filename)
+            # Update JSON file with the stripped filename and flatten structure if needed
+            add_filename_and_flatten_json(file_path, filename)
 
-            # Upload the updated JSON file to Azure Blob Storage
-            blob_client = container_client.get_blob_client(filename)
-            with open(file_path, "rb") as file_data:
-                blob_client.upload_blob(file_data, overwrite=True)
-
-            print(f"Uploaded: {filename}")
+            # Upload the processed file to Azure Blob Storage
+            upload_file_to_blob(file_path, filename)
 
 # Step 3: Create the search index (if not already created)
 def create_index():
@@ -81,40 +143,22 @@ def create_index():
         SimpleField(name="email", type="Edm.String"),
         SearchableField(name="work_experience", type="Collection(Edm.String)"),  # Add work_experience field
         SearchableField(name="filename", type="Collection(Edm.String)")
-
     ]
     index = SearchIndex(name=index_name, fields=fields)
     index_client.create_or_update_index(index)
-    print(f"Index '{index_name}' created.")
+    logger.info(f"Index '{index_name}' created.")
 
 # Step 4: Create the indexer to map the Blob data to the index
 def create_indexer(data_source_name):
     field_mappings = [
-        # Mapping work experience directly as a collection of strings
         FieldMapping(source_field_name="work_experience", target_field_name="work_experience"),
-
-        # Mapping skills directly as a collection of strings
         FieldMapping(source_field_name="skills", target_field_name="skills"),
-
-        # Mapping certifications directly as a collection of strings
         FieldMapping(source_field_name="certifications", target_field_name="certifications"),
-
-        # Mapping education directly as a collection of strings
         FieldMapping(source_field_name="education", target_field_name="education"),
-
-        # Mapping phone number directly
         FieldMapping(source_field_name="phone_number", target_field_name="phone_number"),
-
-        # Mapping email directly
         FieldMapping(source_field_name="email", target_field_name="email"),
-
-        # Mapping filename directly
         FieldMapping(source_field_name="filename", target_field_name="filename")
     ]
-
-
-
-    
     indexer = SearchIndexer(
         name="resume-indexer",
         data_source_name=data_source_name,
@@ -127,12 +171,11 @@ def create_indexer(data_source_name):
         field_mappings=field_mappings
     )
     indexer_client.create_or_update_indexer(indexer)
-    print(f"Indexer created with data source: {data_source_name}")
-
+    logger.info(f"Indexer created with data source: {data_source_name}")
 
 def run_indexer():
     indexer_client.run_indexer("resume-indexer")
-    print("Indexer execution initiated.")
+    logger.info("Indexer execution initiated.")
 
 # Step 6: Query the indexed data (for demonstration)
 def search_index():
@@ -141,13 +184,12 @@ def search_index():
     # Example search query for job title
     results = search_client.search("Machine Learning Engineer")
     for result in results:
-        print(result)
+        logger.info(result)
 
-    print("Indexer has been executed and search results retrieved.")
-
+    logger.info("Indexer has been executed and search results retrieved.")
 
 if __name__ == "__main__":
-    upload_json_files()  # Upload JSON files to Blob Storage
+    upload_json_files(local_folder_path)  # Upload JSON files to Blob Storage
     create_index()  # Create the index
     create_indexer(data_source_name)  # Create the indexer
     run_indexer()  # Run the indexer
