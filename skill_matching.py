@@ -2,7 +2,7 @@ import json
 from fuzzywuzzy import fuzz
 from openai import AzureOpenAI
 import csv  # Add missing CSV import
-
+import re
 # Azure OpenAI credentials
 openclient = AzureOpenAI(
     azure_endpoint="https://ex-openaigpt4.openai.azure.com/",
@@ -10,17 +10,36 @@ openclient = AzureOpenAI(
     api_version="2024-02-01"
 )
 
-# Function to extract skills from query results
 def load_skills_from_query_results(query_results):
     """Extract and aggregate skills from query results."""
     skills = []
+    
+    # Function to clean and merge individual characters into valid skills
+    def merge_skill_characters(skill_str):
+        # Remove spaces, commas, and rejoin characters into a word
+        cleaned_skill = ''.join(skill_str.split(',')).replace(' ', '')
+        return cleaned_skill
+    
+    # Regular expression to validate that skills are words (minimum 2 letters)
+    def is_valid_skill(skill):
+        return bool(re.match(r'^[a-zA-Z]{2,}$', skill))  # Only letters and at least 2 characters
+    
     try:
         results = json.loads(query_results)  # Parse the query results JSON
+        
         for result in results:
             # Ensure 'skills' exists and is formatted as a list
             if "skills" in result and isinstance(result["skills"], list):
-                skills.extend(result["skills"])
-        return list(set(skills))  # Remove duplicates
+                for skill in result["skills"]:
+                    # Merge individual characters if the skill is malformed
+                    merged_skill = merge_skill_characters(skill)
+                    # Validate the merged skill
+                    if is_valid_skill(merged_skill):
+                        skills.append(merged_skill)
+        
+        # Remove duplicates
+        return list(set(skills))
+    
     except json.JSONDecodeError as e:
         print(f"Error parsing query results: {e}")
         return []
@@ -60,7 +79,11 @@ def extract_job_information(job_description):
         "Industry": "",
         "Education": "",
         "Years of Experience": "",
-        "Skills"(keep skills short no extra words ie python, matlab, excel...): "",
+        "Skills"(make sure skills are short ie python, matlab, c++):[
+0:"skill1"
+1:"skill2"
+2:"skill3"
+],
         "Abilities": "",
         "Certifications": ""
     }"""

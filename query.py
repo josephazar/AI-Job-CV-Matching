@@ -8,6 +8,7 @@ from hard_requirements import filter_by_hard_requirements
 import pandas as pd
 import os
 from dotenv import load_dotenv
+import re
 # Load environment variables from the .env file
 load_dotenv()
 
@@ -98,6 +99,29 @@ def filter_matching_results(query_results, extracted_skills, job_skills, thresho
     return matching_results
 
 
+def fix_skill_format(extracted_skills):
+    """
+    Detects and fixes job skills extracted with individual letters separated by commas,
+    merging them back into full words.
+    """
+    fixed_skills = []
+
+    for skill in extracted_skills:
+        # If the skill is just letters separated by commas, merge them
+        if len(skill) > 1 and ',' in skill:
+            # Merge the letters into a single word
+            merged_skill = ''.join(skill.split(',')).replace(" ", "")
+            fixed_skills.append(merged_skill)
+        else:
+            # If the skill is already a word (not separated by commas), add it as is
+            fixed_skills.append(skill)
+
+    # Remove duplicates and return
+    print(list(set(fixed_skills)))
+    return list(set(fixed_skills))
+
+
+
 def search_and_filter_candidates():
     """Main wrapper function for the candidate filtering system."""
     st.title("Candidate Filtering System")
@@ -148,6 +172,9 @@ def search_and_filter_candidates():
                         except json.JSONDecodeError:
                             st.error(f"Failed to parse skills for result: {result}")
 
+                # Fix extracted skills by merging letters into words
+                extracted_skills = fix_skill_format(extracted_skills)
+
                 # Remove duplicate skills
                 extracted_skills = list(set(extracted_skills))
 
@@ -166,7 +193,9 @@ def search_and_filter_candidates():
                         job_info = None
 
                 if job_info and "Skills" in job_info:
+                    st.write(job_info)
                     job_skills = job_info["Skills"]
+                    job_skills = fix_skill_format(job_skills)
                     st.write(f"Job skills: {', '.join(job_skills)}")
 
                     with st.spinner("Filtering results by matching skills..."):

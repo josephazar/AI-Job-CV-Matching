@@ -40,7 +40,7 @@ def clean_gpt_output(gpt_output):
         print(f"Error cleaning GPT output: {e}")
         return gpt_output  # Return as-is if cleaning fails
     
-    
+
 def extract_email_data(json_response):
     """Extract only the data starting from 'email' key onwards."""
     try:
@@ -79,12 +79,12 @@ def filter_by_hard_requirements(results, hard_requirements):
                     "content": (
                         f"Filter the provided query results based on the following hard requirements:\n\n"
                         f"{json.dumps(gpt_input, indent=2)}\n\n"
-                        f"Return the results in JSON format only, starting directly from the list of objects. "
+                        f"Return the results in JSON format only, starting directly from the list of objects. dont include an characters like ```json before outputting the json "
                         f"Do not include the 'filtered_results' wrapper. Ensure the JSON is valid and properly formatted."
                     )
                 }
             ],
-            max_tokens=1000,
+            max_tokens=4000,
             temperature=0.5
         )
 
