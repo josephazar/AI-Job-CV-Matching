@@ -1,6 +1,9 @@
 import streamlit as st
 import base64
+from dotenv import load_dotenv
 import os
+load_dotenv()
+
 import json
 import re
 import string
@@ -10,9 +13,7 @@ from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import HttpResponseError
 import unicodedata
 import requests
-from dotenv import load_dotenv
-# Load environment variables from the .env file
-load_dotenv()
+
 
 # Azure Blob Storage credentials
 blob_connection_string = os.getenv("AZURE_BLOB_CONNECTION_STRING")

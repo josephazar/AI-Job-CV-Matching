@@ -1,4 +1,7 @@
+from dotenv import load_dotenv
 import os
+load_dotenv()
+
 import json
 from dotenv import load_dotenv
 from azure.storage.blob import BlobServiceClient

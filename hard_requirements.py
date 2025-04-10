@@ -80,6 +80,7 @@ def filter_by_hard_requirements(results, hard_requirements):
                         f"Filter the provided query results based on the following hard requirements:\n\n"
                         f"{json.dumps(gpt_input, indent=2)}\n\n"
                         f"Return the results in JSON format only, starting directly from the list of objects. dont include an characters like ```json before outputting the json "
+                        f"add another field in the json a short reason why it passed the hard requirements"
                         f"Do not include the 'filtered_results' wrapper. Ensure the JSON is valid and properly formatted."
                     )
                 }

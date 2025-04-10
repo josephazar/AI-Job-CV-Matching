@@ -80,9 +80,9 @@ def extract_job_information(job_description):
         "Education": "",
         "Years of Experience": "",
         "Skills"(make sure skills are short ie python, matlab, c++):[
-0:"skill1"
-1:"skill2"
-2:"skill3"
+"skill1",
+"skill2",
+"skill3",
 ],
         "Abilities": "",
         "Certifications": ""

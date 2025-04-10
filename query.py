@@ -125,9 +125,41 @@ def fix_skill_format(extracted_skills):
 def search_and_filter_candidates():
     """Main wrapper function for the candidate filtering system."""
     st.title("Candidate Filtering System")
+    job_desc = """
+We are seeking a passionate and motivated Entry-Level Front-End Developer to join our growing team. As a Front-End Developer, you will work closely with senior developers, designers, and product managers to help build user-friendly, responsive, and dynamic websites and applications. This is a great opportunity for someone looking to kick-start their career in web development.
 
+Responsibilities:
+Assist in the development and maintenance of the front-end of websites and web applications.
+Write clean, well-documented, and reusable code in HTML, CSS, and JavaScript.
+Collaborate with UI/UX designers to implement and optimize design and user interfaces.
+Ensure responsiveness and cross-browser compatibility of websites.
+Troubleshoot and debug issues related to front-end performance.
+Integrate APIs and third-party libraries to enhance functionality.
+Optimize web applications for speed and performance.
+Stay up-to-date with the latest web development trends, techniques, and best practices.
+Qualifications:
+Basic understanding of HTML, CSS, and JavaScript.
+Familiarity with modern front-end frameworks (e.g., React, Vue.js, Angular) is a plus.
+Experience with version control tools like Git.
+Strong problem-solving skills and attention to detail.
+Ability to work in a collaborative team environment.
+Strong communication skills and a desire to learn.
+Knowledge of web development tools such as code editors (e.g., VSCode), browser developer tools, etc.
+A portfolio or examples of past work is a plus (e.g., personal projects, GitHub repositories).
+Preferred Skills:
+Experience with CSS preprocessors (SASS, LESS).
+Knowledge of responsive design techniques.
+Familiarity with front-end build tools like Webpack or Gulp.
+Basic understanding of web accessibility principles.
+Exposure to Agile development methodologies.
+Education:
+Bachelor’s degree in Computer Science, Web Development, or a related field, or equivalent practical experience.
+"""
+    st.markdown("#### Sample Job Description:")
+    st.markdown(job_desc)
     # Job description input (search query)
     job_description = st.text_area("Enter the job description:", placeholder="Paste the job description here...")
+
 
     # Filter options for search fields
     with st.expander("Advanced Search Fields (Optional)"):
@@ -160,6 +192,7 @@ def search_and_filter_candidates():
 
                 # Dynamically convert the results to a pandas DataFrame
                 df = pd.json_normalize(st.session_state.results)
+                df = reorder_and_clean_df(df)
                 st.write(df)
 
                 # Extracted skills from the combined query results (job description)
@@ -207,6 +240,7 @@ def search_and_filter_candidates():
                     st.subheader("Filtered Matching Results (Based on Skills)")
                     if st.session_state.filtered_results:
                         df_filtered = pd.json_normalize(st.session_state.filtered_results)
+                        df_filtered = reorder_and_clean_df(df_filtered)
                         st.write(df_filtered)
                     else:
                         st.warning("No matching results found based on skills.")
@@ -238,8 +272,21 @@ def search_and_filter_candidates():
                 st.subheader("Final Results After Hard Requirements")
                 if final_results:
                     df_final = pd.json_normalize(final_results)
+                    df_final = reorder_and_clean_df(df_final)
                     st.dataframe(df_final)
                 else:
                     st.warning("No results matched the hard requirements.")
             else:
                 st.warning("Please enter hard requirements to filter the results.")
+
+def reorder_and_clean_df(df):
+    """Reorder the DataFrame to start with 'filename' column and drop empty columns."""
+    if 'filename' in df.columns:
+        cols = ['filename'] + [col for col in df.columns if col != 'filename']
+        df = df[cols]
+    # Convert any list or dict columns to readable strings
+    for col in df.columns:
+        if df[col].apply(lambda x: isinstance(x, (list, dict))).any():
+            df[col] = df[col].apply(lambda x: json.dumps(x, indent=2) if isinstance(x, (list, dict)) else x)
+    df = df.dropna(axis=1, how='all')  # Drop columns with all NaN values
+    return df
